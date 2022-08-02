@@ -559,7 +559,7 @@ ResponseClassType = String
 class ResponseMessageType(ComplexModel):
     __namespace__ = EWS_M_NS
     _type_info = {"ResponseClass": XmlAttribute(String),
-                  
+
                   "MessageText": String,
                   "ResponseCode": ResponseCodeType,
                   "DescriptiveLinkKey": Integer,

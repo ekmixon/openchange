@@ -13,7 +13,7 @@ def parse_equality(line, last_value):
 
     equ_idx = line.find("=")
     if equ_idx > -1:
-        error_name = line[0:equ_idx].strip()
+        error_name = line[:equ_idx].strip()
         error_value = int(line[equ_idx+1:].strip())
     else:
         error_name = line.strip()

@@ -58,10 +58,10 @@ def setup_path(*args):
     global _setupdir
     return os.path.join(_setupdir, *args)
 
-if not opts.openchangedb:
-    if opts.deprovision:
-	openchange.deprovision(setup_path, lp, creds, firstorg=opts.firstorg, firstou=opts.firstou)
-    else:
-	openchange.provision(setup_path, lp, creds, firstorg=opts.firstorg, firstou=opts.firstou)
+if opts.openchangedb:
+    openchange.openchangedb_provision(lp, firstorg=opts.firstorg, firstou=opts.firstou)
+
+elif opts.deprovision:
+    openchange.deprovision(setup_path, lp, creds, firstorg=opts.firstorg, firstou=opts.firstou)
 else:
-	openchange.openchangedb_provision(lp, firstorg=opts.firstorg, firstou=opts.firstou)
+    openchange.provision(setup_path, lp, creds, firstorg=opts.firstorg, firstou=opts.firstou)

@@ -60,10 +60,14 @@ dn: CASE_INSENSITIVE
         self.reopen()
 
     def add_rootDSE(self, ocserverdn, firstorg, firstou):
-        self.ldb.add({"dn": "@ROOTDSE",
-                      "defaultNamingContext": "CN=%s,CN=%s,%s" % (firstou, firstorg, ocserverdn),
-                      "rootDomainNamingContext": ocserverdn,
-                      "vendorName": "OpenChange Team (http://www.openchange.org)"})
+        self.ldb.add(
+            {
+                "dn": "@ROOTDSE",
+                "defaultNamingContext": f"CN={firstou},CN={firstorg},{ocserverdn}",
+                "rootDomainNamingContext": ocserverdn,
+                "vendorName": "OpenChange Team (http://www.openchange.org)",
+            }
+        )
 
     def add_server(self, ocserverdn, netbiosname, firstorg, firstou):
         self.ldb.add({"dn": ocserverdn,
@@ -72,12 +76,21 @@ dn: CASE_INSENSITIVE
                       "GlobalCount": "1",
                       "ChangeNumber": "1",
                       "ReplicaID": "1"})
-        self.ldb.add({"dn": "CN=%s,%s" % (firstorg, ocserverdn),
-                      "objectClass": ["top", "org"],
-                      "cn": firstorg})
-        self.ldb.add({"dn": "CN=%s,CN=%s,%s" % (firstou, firstorg, ocserverdn),
-                      "objectClass": ["top", "ou"],
-                      "cn": firstou})
+        self.ldb.add(
+            {
+                "dn": f"CN={firstorg},{ocserverdn}",
+                "objectClass": ["top", "org"],
+                "cn": firstorg,
+            }
+        )
+
+        self.ldb.add(
+            {
+                "dn": f"CN={firstou},CN={firstorg},{ocserverdn}",
+                "objectClass": ["top", "ou"],
+                "cn": firstou,
+            }
+        )
 
     def add_root_public_folder(self, dn, fid, change_num, SystemIdx, childcount):
         self.ldb.add({"dn": dn,
@@ -118,12 +131,13 @@ dn: CASE_INSENSITIVE
         ChangeNumber = self.get_message_ChangeNumber(names.netbiosname)
         ReplicaID = self.get_message_ReplicaID(names.netbiosname)
         if dn_prefix is None:
-            dn_prefix = "CN=publicfolders,CN=%s,CN=%s,%s" % (names.firstou, names.firstorg, names.ocserverdn)
+            dn_prefix = f"CN=publicfolders,CN={names.firstou},CN={names.firstorg},{names.ocserverdn}"
+
         fid = gen_mailbox_folder_fid(GlobalCount, ReplicaID)
-        dn = "CN=%s,%s" % (fid, dn_prefix)
+        dn = f"CN={fid},{dn_prefix}"
         change_num = gen_mailbox_folder_fid(ChangeNumber, ReplicaID)
         childcount = len(children)
-        print "\t* %-40s: 0x%.16x (%s)" % (name, int(fid, 10), fid)
+        name = path[-1]
         if parent_fid == 0:
             self.add_root_public_folder(dn, fid, change_num, SystemIndex, childcount)
         else:
@@ -139,30 +153,51 @@ dn: CASE_INSENSITIVE
 
     def add_public_folders(self, names):
         pfstoreGUID = str(uuid.uuid4())
-        self.ldb.add({"dn": "CN=publicfolders,CN=%s,CN=%s,%s" % (names.firstou, names.firstorg, names.ocserverdn),
-                      "objectClass": ["container"],
-                      "cn": "publicfolders",
-                      "StoreGUID": pfstoreGUID,
-                      "ReplicaID": str(1)})
-        public_folders = ({
-                "IPM_SUBTREE": ({}, 2),
-                "NON_IPM_SUBTREE": ({
-                        "EFORMS REGISTRY": ({}, 4),
-                        "Events Root": ({}, -1),
-                        "OFFLINE ADDRESS BOOK": ({
-                                "/o=%s/cn=addrlists/cn=oabs/cn=Default Offline Address Book" % (names.firstorg): ({}, 9),
-                                }, 6),
-                        "SCHEDULE+ FREE BUSY": ({
-                                "EX:/o=%s/ou=%s" % (names.firstorg.lower(), names.firstou.lower()): ({}, 8),
-                                }, 5),
-                        }, 3),
-                }, 1)
+        self.ldb.add(
+            {
+                "dn": f"CN=publicfolders,CN={names.firstou},CN={names.firstorg},{names.ocserverdn}",
+                "objectClass": ["container"],
+                "cn": "publicfolders",
+                "StoreGUID": pfstoreGUID,
+                "ReplicaID": str(1),
+            }
+        )
+
+        public_folders = {
+            "IPM_SUBTREE": ({}, 2),
+            "NON_IPM_SUBTREE": (
+                {
+                    "EFORMS REGISTRY": ({}, 4),
+                    "Events Root": ({}, -1),
+                    "OFFLINE ADDRESS BOOK": (
+                        {
+                            f"/o={names.firstorg}/cn=addrlists/cn=oabs/cn=Default Offline Address Book": (
+                                {},
+                                9,
+                            )
+                        },
+                        6,
+                    ),
+                    "SCHEDULE+ FREE BUSY": (
+                        {
+                            f"EX:/o={names.firstorg.lower()}/ou={names.firstou.lower()}": (
+                                {},
+                                8,
+                            )
+                        },
+                        5,
+                    ),
+                },
+                3,
+            ),
+        }, 1
+
 
         self.add_one_public_folder(0, ("Public Folder Root",), public_folders[0], public_folders[1], names)
         
     def lookup_server(self, cn, attributes=[]):
         # Step 1. Search Server object
-        filter = "(&(objectClass=server)(cn=%s))" % cn
+        filter = f"(&(objectClass=server)(cn={cn}))"
         res = self.ldb.search("", scope=ldb.SCOPE_SUBTREE,
                            expression=filter, attrs=attributes)
         if len(res) != 1:
@@ -179,7 +214,7 @@ dn: CASE_INSENSITIVE
         server_dn = self.lookup_server(server, []).dn
 
         # Step 2. Search User object
-        filter = "(&(objectClass=mailbox)(cn=%s))" % (username)
+        filter = f"(&(objectClass=mailbox)(cn={username}))"
         return self.ldb.search(server_dn, scope=ldb.SCOPE_SUBTREE,
                            expression=filter, attrs=attributes)
 
@@ -193,7 +228,7 @@ dn: CASE_INSENSITIVE
         """
         server_dn = self.lookup_server(server, []).dn
 
-        filter = "(&(objectClass=publicfolder)(PidTagDisplayName=%s))" % (displayname)
+        filter = f"(&(objectClass=publicfolder)(PidTagDisplayName={displayname}))"
         return self.ldb.search(server_dn, scope=ldb.SCOPE_SUBTREE,
                                expression=filter, attrs=attributes)
 

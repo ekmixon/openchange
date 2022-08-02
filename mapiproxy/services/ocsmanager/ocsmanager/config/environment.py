@@ -38,26 +38,21 @@ def _load_samba_environment():
     domaindn = samdb_ldb.domain_dn()
 
     rootdn = domaindn
-    configdn = "CN=Configuration," + rootdn
+    configdn = f"CN=Configuration,{rootdn}"
     firstorg = FIRST_ORGANIZATION
     firstou = FIRST_ORGANIZATION_UNIT
 
-    sam_environ = {"samdb_ldb": samdb_ldb,
-                   "private_dir": params.get("private dir"),
-                   "domaindn": domaindn,
-                   "oc_user_basedn": "CN=%s,CN=%s,CN=%s,%s" \
-                       % (firstou, firstorg, netbiosname, domaindn),
-                   "firstorgdn": ("CN=%s,CN=Microsoft Exchange,CN=Services,%s"
-                                  % (firstorg, configdn)),
-                   "legacyserverdn": ("/o=%s/ou=%s/cn=Configuration/cn=Servers"
-                                      "/cn=%s"
-                                      % (firstorg, firstou, netbiosname)),
-                   "hostname": hostname,
-                   "dnsdomain": dnsdomain}
-
-    # OpenChange dispatcher DB names
-
-    return sam_environ
+    return {
+        "samdb_ldb": samdb_ldb,
+        "private_dir": params.get("private dir"),
+        "domaindn": rootdn,
+        "oc_user_basedn": f"CN={firstou},CN={firstorg},CN={netbiosname},{rootdn}",
+        "firstorgdn": f"CN={firstorg},CN=Microsoft Exchange,CN=Services,{configdn}",
+        "legacyserverdn": "/o=%s/ou=%s/cn=Configuration/cn=Servers"
+        "/cn=%s" % (firstorg, firstou, netbiosname),
+        "hostname": hostname,
+        "dnsdomain": dnsdomain,
+    }
 
 
 def _load_ocdb():
@@ -68,9 +63,7 @@ def _load_ocdb():
     params = samba.param.LoadParm()
     params.load_default()
 
-    ocdb = Ldb(os.path.join(params.get("private dir"), "openchange.ldb"))
-
-    return ocdb
+    return Ldb(os.path.join(params.get("private dir"), "openchange.ldb"))
 
 
 def load_environment(global_conf, app_conf):

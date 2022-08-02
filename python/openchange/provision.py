@@ -42,7 +42,7 @@ FIRST_ORGANIZATION_UNIT = "First Administrative Group"
 def abstract():
     import inspect
     caller = inspect.getouterframes(inspect.currentframe())[1][3]
-    raise NotImplementedError(caller + ' must be implemented in subclass')
+    raise NotImplementedError(f'{caller} must be implemented in subclass')
 
 # Define an abstraction for progress reporting from the provisioning
 class AbstractProgressReporter(object):
@@ -105,11 +105,11 @@ def guess_names_from_smbconf(lp, firstorg=None, firstou=None):
         domaindn = "DC=" + dnsdomain.replace(".", ",DC=")
     else:
         domain = netbiosname
-        domaindn = "CN=" + netbiosname
+        domaindn = f"CN={netbiosname}"
 
     rootdn = domaindn
-    configdn = "CN=Configuration," + rootdn
-    schemadn = "CN=Schema," + configdn
+    configdn = f"CN=Configuration,{rootdn}"
+    schemadn = f"CN=Schema,{configdn}"
     sitename = DEFAULTSITE
 
     names = ProvisionNames()
@@ -132,13 +132,19 @@ def guess_names_from_smbconf(lp, firstorg=None, firstou=None):
 
     names.firstorg = firstorg
     names.firstou = firstou
-    names.firstorgdn = "CN=%s,CN=Microsoft Exchange,CN=Services,%s" % (firstorg, configdn)
-    names.serverdn = "CN=%s,CN=Servers,CN=%s,CN=Sites,%s" % (netbiosname, sitename, configdn)
+    names.firstorgdn = (
+        f"CN={firstorg},CN=Microsoft Exchange,CN=Services,{configdn}"
+    )
+
+    names.serverdn = (
+        f"CN={netbiosname},CN=Servers,CN={sitename},CN=Sites,{configdn}"
+    )
+
 
     # OpenChange dispatcher DB names
-    names.ocserverdn = "CN=%s,%s" % (names.netbiosname, names.domaindn)
+    names.ocserverdn = f"CN={names.netbiosname},{names.domaindn}"
     names.ocfirstorg = firstorg
-    names.ocfirstorgdn = "CN=%s,CN=%s,%s" % (firstou, names.ocfirstorg, names.ocserverdn)
+    names.ocfirstorgdn = f"CN={firstou},CN={names.ocfirstorg},{names.ocserverdn}"
 
     return names
 
@@ -162,10 +168,7 @@ def provision_schema(setup_path, names, lp, creds, reporter, ldif, msg, modify_m
 
     try:
         reporter.reportNextStep(msg)
-        if modify_mode:
-            ldif_function = setup_modify_ldif
-        else:
-            ldif_function = setup_add_ldif
+        ldif_function = setup_modify_ldif if modify_mode else setup_add_ldif
         ldif_function(db, setup_path(ldif), {
                 "FIRSTORG": names.firstorg,
                 "FIRSTORGDN": names.firstorgdn,
@@ -360,34 +363,27 @@ def install_schemas(setup_path, names, lp, creds, reporter):
                " objects (%d): %s" % ldb_error.args)
 
 def get_ldb_url(lp, creds, names):
-    if names.serverrole == "member server":
-        net = Net(creds, lp)
-        dc = net.finddc(domain=names.dnsdomain, flags=nbt.NBT_SERVER_LDAP)
-        url = "ldap://" + dc.pdc_dns_name
-    else:
-        url = lp.samdb_url()
+    if names.serverrole != "member server":
+        return lp.samdb_url()
 
-    return url
+    net = Net(creds, lp)
+    dc = net.finddc(domain=names.dnsdomain, flags=nbt.NBT_SERVER_LDAP)
+    return f"ldap://{dc.pdc_dns_name}"
 
 def get_user_dn(ldb, basedn, username):
-    user_dn = None
-    attrs = get_user_attrs(ldb, basedn, username)
-    if attrs:
-      user_dn = attrs.dn.get_linearized()
-
-    return user_dn
+    return (
+        attrs.dn.get_linearized()
+        if (attrs := get_user_attrs(ldb, basedn, username))
+        else None
+    )
 
 def get_user_attrs(ldb, basedn, username):
     if not isinstance(ldb, Ldb):
         raise TypeError("'ldb' argument must be an Ldb intance")
 
-    ldb_filter = "(&(objectClass=user)(sAMAccountName=%s))" % username
+    ldb_filter = f"(&(objectClass=user)(sAMAccountName={username}))"
     res = ldb.search(base=basedn, scope=SCOPE_SUBTREE, expression=ldb_filter, attrs=["*"])
-    user_attrs = None
-    if len(res) == 1:
-        user_attrs = res[0]
-
-    return user_attrs
+    return res[0] if len(res) == 1 else None
 
 def newuser(lp, creds, username=None):
     """extend user record with OpenChange settings.

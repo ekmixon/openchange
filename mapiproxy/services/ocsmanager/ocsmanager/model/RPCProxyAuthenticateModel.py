@@ -11,10 +11,11 @@ class RPCProxyAuthenticateModel:
 
     def __init__(self):
         self.auth_type = None
-        self.ldap = {}
-        self.ldap['host'] = config['ocsmanager']['rpcproxy']['ldap_host']
-        self.ldap['post'] = config['ocsmanager']['rpcproxy']['ldap_port']
-        self.ldap['basedn'] = config['ocsmanager']['rpcproxy']['ldap_basedn']
+        self.ldap = {
+            'host': config['ocsmanager']['rpcproxy']['ldap_host'],
+            'post': config['ocsmanager']['rpcproxy']['ldap_port'],
+            'basedn': config['ocsmanager']['rpcproxy']['ldap_basedn'],
+        }
 
         return
 

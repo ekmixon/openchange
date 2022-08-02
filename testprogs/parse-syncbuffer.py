@@ -88,20 +88,20 @@ def ReadProperties(filename):
     for line in pLines:
         if line.startswith("0x"):
             idx = line.find(" ")
-            propTag = int(line[0:idx], 16)
+            propTag = int(line[:idx], 16)
             while line[idx] == " ":
                 idx = idx + 1
             nameEndIdx = line.find(" ", idx)
             if nameEndIdx < 0:
                 nameEndIdx = line.find("\t", idx)
-                if nameEndIdx < 0:
-                    nameEndIdx = len(line) - 1
+            if nameEndIdx < 0:
+                nameEndIdx = len(line) - 1
             propName = line[idx:nameEndIdx]
             props[propTag] = propName
             propType = propTag & 0xffff
             if propType == 0x1e:
                 propTag = (propTag & 0xffff0000 | 0x1f)
-                propName = propName + "_UNICODE"
+                propName = f"{propName}_UNICODE"
                 props[propTag] = propName
 
     return props
@@ -120,7 +120,7 @@ class SyncBufferParser:
         state_methods = { PARSER_START: self._doParserStart,
                           PARSER_PRERESPONSE: self._doParserPreResponse,
                           PARSER_RESPONSE: self._doParserResponse }
-                          
+
         while self.pos < len(self.lines) and self.state != PARSER_DONE:
             state_methods[self.state](self.lines[self.pos])
             self.pos = self.pos + 1
@@ -151,10 +151,7 @@ class SyncBufferParser:
             # print "appending %s" % line[0:-1]
             self._appendResponse(line)
         else:
-            if self.lastBlock:
-                self.state = PARSER_DONE
-            else:
-                self.state = PARSER_START
+            self.state = PARSER_DONE if self.lastBlock else PARSER_START
 
     def _appendResponse(self, line):
         pos = 6;
@@ -170,7 +167,7 @@ class SyncBufferParser:
                 else:
                     charValue = chr(int(responseByte, 16))
                     parsed.append(charValue)
-                    it = it + 1
+                    it += 1
                     pos = pos + 3
             pos = pos + 2
         self.bufferLines.append(''.join(parsed))
@@ -185,46 +182,42 @@ class SyncBufferPrinter:
         while pos < length:
             tagstr = self.data[pos:pos+4]
             tag = struct.unpack("<L", tagstr)[0]
-            pos = pos + 4
-            pos = pos + self._printResponseColumn(tag, pos)
+            pos += 4
+            pos += self._printResponseColumn(tag, pos)
 
     def _printResponseColumn(self, tag, pos):
         if MarkerTags.has_key(tag):
             marker_name = MarkerTags[tag]
-            print "* %.8x (%s)" % (tag, marker_name)
             consumed = 0
         elif ICSStateProperties.has_key(tag):
             property_name = ICSStateProperties[tag]
-            print "ICS %.8x (%s):" % (tag, property_name),
             consumed = self._printIDSet(pos)
         elif DeltaStateProperties.has_key(tag):
             property_name = DeltaStateProperties[tag]
-            print "Delta %.8x (%s):" % (tag, property_name),
             consumed = self._printIDSet(pos, True)
         else:
             colType = tag & 0x0fff
             # print "  pos: %d, length: %d, TAG: %.8x, " % (pos, len(self.data), tag)
             prefix = "  %.8x (" % tag
             if Properties.has_key(tag):
-                prefix = prefix + "%s, " % Properties[tag]
+                prefix = prefix + f"{Properties[tag]}, "
             if tag & 0x1000:
                 multiState = 0x1000
-                prefix = prefix + "MULTI-"
+                prefix = f"{prefix}MULTI-"
             else:
                 multiState = 0x0
-            prefix = prefix + "%s):" % PropertyTypes[colType]
-            print prefix,
+            prefix = prefix + f"{PropertyTypes[colType]}):"
             # PidTagSourceKey, PidTagChangeKey or PidTagParentSourceKey
-            if tag == 0x65e00102 or tag == 0x65e20102 or tag == 0x65e10102:
+            if tag in [0x65E00102, 0x65E20102, 0x65E10102]:
                 consumed = self._printBinXID(pos)
             elif tag == 0x65e30102: # PidTagPredecessorChangeList
                 consumed = self._printPredecessorChangeList(pos)
+            elif tag > 0x80000000:
+                consumed = self._printNamedPropValue(pos, multiState | colType)
             else:
-                if tag > 0x80000000:
-                    consumed = self._printNamedPropValue(pos, multiState | colType)
-                else:
-                    consumed = self._printValue(pos, multiState | colType)
+                consumed = self._printValue(pos, multiState | colType)
 
+        marker_name = MarkerTags[tag]
         return consumed
 
     def _printPredecessorChangeList(self, pos):
@@ -297,11 +290,10 @@ class SyncBufferPrinter:
             byteValue = (byteValue
                          + self.data[pos + length]
                          + self.data[pos + length + 1])
-            length = length + 2
+            length += 2
         stringValue = byteValue.decode("utf-16")
         stringLength = len(stringValue)
-        print "(%d chars): \"%s\"" % (stringLength, stringValue)
-
+        length = 0
         return length + 2
 
     def _printValue(self, pos, colType):
@@ -366,11 +358,10 @@ class SyncBufferPrinter:
         pos = pos + 4
         while (ord(self.data[pos + length]) != 0):
             byteValue = byteValue + self.data[pos + length]
-            length = length + 1
+            length += 1
         stringValue = byteValue.decode("iso-8859-1")
         stringLength = len(stringValue)
-        print "(%d chars, %d declared): \"%s\"" % (stringLength, declared, stringValue)
-
+        declared = struct.unpack_from("<L", self.data, pos)[0]
         return 5 + length
 
     def _printUnicode(self, pos):
@@ -383,11 +374,10 @@ class SyncBufferPrinter:
             byteValue = (byteValue
                          + self.data[pos + length]
                          + self.data[pos + length + 1])
-            length = length + 2
+            length += 2
         stringValue = byteValue.decode("utf-16")
         stringLength = len(stringValue)
-        print "(%d chars, %d declared): \"%s\"" % (stringLength, declared, stringValue)
-
+        declared = struct.unpack_from("<L", self.data, pos)[0]
         return 6 + length
 
     def _printSysTime(self, pos):

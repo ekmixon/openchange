@@ -22,15 +22,15 @@ class ClientNotification(object):
         if newmail is None: return (True, 'Missing newmail arguments')
 
         # Sanity checks on newmail dictionary
-        if not "backend" in newmail: return (True, 'Missing backend parameter')
-        if not "username" in newmail: return (True, 'Missing username parameter')
-        if not "folder" in newmail: return (True, 'Missing folder parameter')
-        if not "msgid" in newmail: return (True, 'Missing msgid parameter')
+        if "backend" not in newmail: return (True, 'Missing backend parameter')
+        if "username" not in newmail: return (True, 'Missing username parameter')
+        if "folder" not in newmail: return (True, 'Missing folder parameter')
+        if "msgid" not in newmail: return (True, 'Missing msgid parameter')
 
         root = etree.Element('ocsmanager')
         token = etree.SubElement(root, "token")
         token.text = tokenLogin
-        
+
         notification = etree.SubElement(root, "notification", category="newmail")
 
         backend = etree.SubElement(notification, "backend")

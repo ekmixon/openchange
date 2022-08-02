@@ -68,23 +68,15 @@ class RPCProxyApplication(object):
     def __call__(self, environ, start_response):
         if "REQUEST_METHOD" in environ:
             method = environ["REQUEST_METHOD"]
-            method_name = "_do_" + method
+            method_name = f"_do_{method}"
             if hasattr(self, method_name):
-                if "wsgi.errors" in environ:
-                    log_stream = environ["wsgi.errors"]
-                else:
-                    log_stream = sys.stderr
-
+                log_stream = environ["wsgi.errors"] if "wsgi.errors" in environ else sys.stderr
                 logHandler = logging.StreamHandler(log_stream)
                 fmter = logging.Formatter("[%(process)d:%(name)s] %(levelname)s: %(message)s")
                 logHandler.setFormatter(fmter)
 
-                if "REMOTE_PORT" in environ:
-                    rmt_port = environ["REMOTE_PORT"]
-                else:
-                    rmt_port = "<unknown>"
-
-                logger = logging.Logger(method + ":" + rmt_port)
+                rmt_port = environ["REMOTE_PORT"] if "REMOTE_PORT" in environ else "<unknown>"
+                logger = logging.Logger(f"{method}:{rmt_port}")
                 logger.setLevel(self.log_level)
                 logger.addHandler(logHandler)
                 # logger.set_name(method)

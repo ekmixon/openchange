@@ -29,7 +29,8 @@ class ClientAuthentication(object):
         except etree.XMLSyntaxError:
             return (True, 'Invalid document')
 
-        if xmlData.tag != "ocsmanager": return (True, 'Incorrect root element %s' % xmlData.tag)
+        if xmlData.tag != "ocsmanager":
+            return True, f'Incorrect root element {xmlData.tag}'
 
         return (False, xmlData)
 
@@ -47,14 +48,16 @@ class ClientAuthentication(object):
         (error, xmlData) = self._check_document(payload)
         if error is True: return (error, xmlData)
 
-        d = {}
         token = xmlData.find('token')
         if token is None: return (True, 'No token parameter received')
-        if not 'type' in token.attrib: return (True, 'No type attribute in token parameter')
+        if 'type' not in token.attrib: return (True, 'No type attribute in token parameter')
         if token.attrib['type'] != 'salt': 
-            return (True, 'Expected type=salt for attribute, got type=%s' % token.attrib['type'])
-        d["token"] = token.text
+            return (
+                True,
+                f"Expected type=salt for attribute, got type={token.attrib['type']}",
+            )
 
+        d = {"token": token.text}
         salt = xmlData.find('salt')
         if salt is None: return (True, 'No salt parameter received')
         d["salt"] = salt.text
@@ -91,9 +94,9 @@ class ClientAuthentication(object):
         elif d["encryption"] == "ssha":
             sshaPassword = d['password']
         else:
-            return (True, 'Unsupported encryption scheme: %s' % d["encryption"])
+            return True, f'Unsupported encryption scheme: {d["encryption"]}'
 
-        payload = "%s:%s:%s" % (d["username"], sshaPassword, salt_token)
+        payload = f'{d["username"]}:{sshaPassword}:{salt_token}'
         h = hashlib.sha1(payload)
         h.update(salt_token)
         token = h.hexdigest()

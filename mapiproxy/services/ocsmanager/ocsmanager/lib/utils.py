@@ -10,8 +10,9 @@ def validateDocXML(payload):
         xmlData = etree.XML(payload)
     except etree.XMLSyntaxError:
         return (True, 'Invalid document')
-    
+
     if xmlData.tag is None: return (True, 'Invalid root element')
-    if xmlData.tag != 'ocsmanager': return (True, 'Invalid root element %s' % xmlData.tag)
+    if xmlData.tag != 'ocsmanager':
+        return True, f'Invalid root element {xmlData.tag}'
 
     return (False, xmlData)

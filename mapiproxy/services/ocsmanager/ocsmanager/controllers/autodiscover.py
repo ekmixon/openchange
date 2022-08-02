@@ -44,11 +44,11 @@ class AutodiscoverHandler(object):
                                  "HTTP_X_FORWARDED_HOST",
                                  "HTTP_HOST"])
         try:
-            while self.http_server_name == None:
+            while self.http_server_name is None:
                 env_name = server_env_names.next()
                 if env_name in self.environ:
                     self.http_server_name \
-                        = (self.environ[env_name].split(":"))[0]
+                            = (self.environ[env_name].split(":"))[0]
         except StopIteration:
             pass
 
@@ -79,23 +79,16 @@ class AutodiscoverHandler(object):
 
         # fetch user data
         if "LegacyDN" in self.request:
-            ldb_filter = ("(legacyExchangeDN=%s)"
-                          % self.request["LegacyDN"])
+            ldb_filter = f'(legacyExchangeDN={self.request["LegacyDN"]})'
         elif "EMailAddress" in self.request:
-            ldb_filter = ("(&(objectClass=user)(mail=%s))"
-                          % self.request["EMailAddress"])
+            ldb_filter = f'(&(objectClass=user)(mail={self.request["EMailAddress"]}))'
         # TODO: handle missing parameter
 
-        base_dn = "CN=Users,%s" % config["samba"]["domaindn"]
+        base_dn = f'CN=Users,{config["samba"]["domaindn"]}'
         res = samdb.search(base=base_dn, scope=ldb.SCOPE_SUBTREE,
                            expression=ldb_filter, attrs=["*"])
-        if len(res) == 1:
-            ldb_record = res[0]
-        else:
-            ldb_record = None
-
         # TODO: handle invalid nbr of records
-        return ldb_record
+        return res[0] if len(res) == 1 else None
 
     def _fill_deployment_id(self, record):
         samdb = config["samba"]["samdb_ldb"]
@@ -114,16 +107,15 @@ class AutodiscoverHandler(object):
     def _get_user_record(self, ldb_record):
         record = None
 
-        if "samba" in config:
-            record = {}
-            if "displayName" in ldb_record:
-                record["DisplayName"] = ldb_record["displayName"][0]
-            if "legacyExchangeDN" in ldb_record:
-                record["LegacyDN"] = ldb_record["legacyExchangeDN"][0]
-            self._fill_deployment_id(record)
-        else:
+        if "samba" not in config:
             raise RuntimeError("samba config not loaded")
 
+        record = {}
+        if "displayName" in ldb_record:
+            record["DisplayName"] = ldb_record["displayName"][0]
+        if "legacyExchangeDN" in ldb_record:
+            record["LegacyDN"] = ldb_record["legacyExchangeDN"][0]
+        self._fill_deployment_id(record)
         return record
 
     def _fetch_mdb_dn(self, user_ldb_record):
@@ -162,19 +154,17 @@ class AutodiscoverHandler(object):
         the ServerVersion element, or the ServerDN element can be used. """
         prot_element = Element("Protocol")
         account_element.append(prot_element)
-        response_tree = \
-            {"Type": "EXCH",
-             "ServerDN": config["samba"]["legacyserverdn"],
-             "ServerVersion": "720082AD",  # TODO: that is from ex2010
-             "MdbDN": mdb_dn,
-             "Server": self.http_server_name,
-             "ASUrl": "https://%s/ews/as" \
-                 % self.http_server_name,  # availability
-             "OOFUrl": "https://%s/ews/oof" \
-                 % self.http_server_name,  # out-of-office
-             "OABUrl": "https://%s/ews/oab" \
-                 % self.http_server_name,  # offline address book
-             }
+        response_tree = {
+            "Type": "EXCH",
+            "ServerDN": config["samba"]["legacyserverdn"],
+            "ServerVersion": "720082AD",
+            "MdbDN": mdb_dn,
+            "Server": self.http_server_name,
+            "ASUrl": f"https://{self.http_server_name}/ews/as",
+            "OOFUrl": f"https://{self.http_server_name}/ews/oof",
+            "OABUrl": f"https://{self.http_server_name}/ews/oab",
+        }
+
         self._append_elements(prot_element, response_tree)
 
         """
@@ -203,11 +193,11 @@ class AutodiscoverHandler(object):
     def _append_error(self, resp_element, error_code):
         error_messages = {500: "Unknown e-mail address",
                           501: "No configuration information available" \
-                              " for e-mail address",
+                                  " for e-mail address",
                           600: "Invalid request",
                           601: "Configuration information not available",
                           602: "Error in configuration information for" \
-                              " e-mail address",
+                                  " e-mail address",
                           603: "An internal error occurred",
                           0: "An unknown error occurred"}
 
@@ -223,11 +213,7 @@ class AutodiscoverHandler(object):
                                           "Id": str(server_id)})
         resp_element.append(error_element)
 
-        if error_code in error_messages:
-            message = error_messages[error_code]
-        else:
-            message = error_messages[0]
-
+        message = error_messages.get(error_code, error_messages[0])
         response_tree = {"ErrorCode": str(error_code),
                          "Message": message}
         self._append_elements(error_element, response_tree)
@@ -259,9 +245,9 @@ class AutodiscoverHandler(object):
         else:
             self._append_error(resp_element, 600)
 
-        body = ("<?xml version='1.0' encoding='utf-8'?>\n"
-                + tostring(top_element, "utf-8"))
-        return body
+        return "<?xml version='1.0' encoding='utf-8'?>\n" + tostring(
+            top_element, "utf-8"
+        )
 
 
 class AutodiscoverController(BaseController):
@@ -271,11 +257,7 @@ class AutodiscoverController(BaseController):
     def autodiscover(self, **kwargs):
         #TODO: authentication
         try:
-            if "environ" in kwargs:
-                environ = kwargs["environ"]
-            else:
-                environ = None
-
+            environ = kwargs.get("environ")
             rqh = AutodiscoverHandler(request, environ)
             response.headers["content-type"] = "application/xml"
             body = rqh.response()

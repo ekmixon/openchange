@@ -285,8 +285,8 @@ class ExchangeService(ServiceBase):
         # lookup usercn from email
 
         ldbdb = config["samba"]["samdb_ldb"]
-        base_dn = "CN=Users,%s" % config["samba"]["domaindn"]
-        ldb_filter = "(&(objectClass=user)(mail=%s))" % email
+        base_dn = f'CN=Users,{config["samba"]["domaindn"]}'
+        ldb_filter = f"(&(objectClass=user)(mail={email}))"
         res = ldbdb.search(base=base_dn, scope=ldb.SCOPE_SUBTREE,
                            expression=ldb_filter, attrs=["cn"])
         if len(res) == 1:
@@ -294,21 +294,21 @@ class ExchangeService(ServiceBase):
             usercn = ldb_record["cn"][0]
         else:
             usercn = None
-        
+
         cal_folder = None
 
         # lookup mapistore url for cal folder
         cal_folder = None
         if usercn is not None:
             ldbdb = config["oc_ldb"]
-            base_dn = "CN=%s,%s" % (usercn, config["samba"]["oc_user_basedn"])
+            base_dn = f'CN={usercn},{config["samba"]["oc_user_basedn"]}'
             ldb_filter = "(&(objectClass=systemfolder)(PidTagContainerClass=IPF.Appointment)(MAPIStoreURI=*))"
             res = ldbdb.search(base=base_dn, scope=ldb.SCOPE_SUBTREE,
                                expression=ldb_filter, attrs=["MAPIStoreURI"])
             for x in xrange(len(res)):
                 ldb_record = res[x]
                 uri = ldb_record["MAPIStoreURI"][0]
-                if str(uri).find("/personal") > -1:  # FIXME: this is evil
+                if "/personal" in str(uri):  # FIXME: this is evil
                     context = config["mapistore"].add_context(uri, usercn)
                     cal_folder = context.open()
 
@@ -326,17 +326,16 @@ class ExchangeService(ServiceBase):
         if timezone.DaylightTime is not None:
             std_datetime = ExchangeService._timezone_datetime(utcdate.year, timezone.StandardTime)
             dst_datetime = ExchangeService._timezone_datetime(utcdate.year, timezone.DaylightTime)
-            if std_datetime < dst_datetime:
-                if utcdate >= std_datetime and utcdate < dst_datetime:
-                    bias = bias + timezone.StandardTime.Bias
-                else:
-                    bias = bias + timezone.DaylightTime.Bias
+            if (
+                std_datetime < dst_datetime
+                and utcdate >= std_datetime
+                and utcdate < dst_datetime
+                or std_datetime >= dst_datetime
+                and (utcdate < dst_datetime or utcdate >= std_datetime)
+            ):
+                bias = bias + timezone.StandardTime.Bias
             else:
-                if utcdate >= dst_datetime and utcdate < std_datetime:
-                    bias = bias + timezone.DaylightTime.Bias
-                else:
-                    bias = bias + timezone.StandardTime.Bias
-
+                bias = bias + timezone.DaylightTime.Bias
         return utcdate - datetime.timedelta(0, bias * 60)
 
     @staticmethod
@@ -389,7 +388,7 @@ class ExchangeService(ServiceBase):
         fb_response.ResponseMessage = ResponseMessageType()
         fb_response.ResponseMessage.ResponseClass = "Error"
         fb_response.ResponseMessage.MessageText \
-            = "Unable to open the requested user's calendar"
+                = "Unable to open the requested user's calendar"
         fb_response.ResponseMessage.ResponseCode = "ErrorMailRecipientNotFound"
         fb_response.FreeBusyView = FreeBusyView()
         fb_response.FreeBusyView.FreeBusyViewType = "None"
@@ -399,7 +398,7 @@ class ExchangeService(ServiceBase):
     @staticmethod
     def _suggestions_response(timezone, suggestions_view_options):
         suggestions = SuggestionsResponseType()
-            
+
         suggestions.ResponseMessage = ResponseMessageType(ResponseClass="NoError")
 
         start = suggestions_view_options.DetailedSuggestionsWindow.StartTime
@@ -428,7 +427,7 @@ class ExchangeService(ServiceBase):
         suggestions.ResponseMessage = ResponseMessageType(ResponseClass="NoError")
         suggestions.ResponseMessage.ResponseClass = "Error"
         suggestions.ResponseMessage.MessageText \
-            = "Unable to open the requested user's calendar"
+                = "Unable to open the requested user's calendar"
         suggestions.ResponseMessage.ResponseCode = "ErrorMailRecipientNotFound"
         suggestions.SuggestionDayResultArray = []
 
@@ -445,14 +444,14 @@ class ExchangeService(ServiceBase):
          _out_variable_names=("FreeBusyResponseArray", "SuggestionsResponse"),
          _returns=(ArrayOfFreeBusyResponse,SuggestionsResponseType),
          _soap_body_style="document")
-    def GetUserAvailabilityRequest(ctx, 
-                                   timezone = None, mailbox_data_array = None,
-                                   freebusy_view_options = None,
-                                   suggestions_view_options = None):
-        ctx.out_header = ServerVersionInfo(MajorVersion=8,
-                                           MinorVersion=0,
-                                           MajorBuildNumber=685,
-                                           MinorBuildNumber=24)
+    def GetUserAvailabilityRequest(self, timezone = None, mailbox_data_array = None, freebusy_view_options = None, suggestions_view_options = None):
+        self.out_header = ServerVersionInfo(
+            MajorVersion=8,
+            MinorVersion=0,
+            MajorBuildNumber=685,
+            MinorBuildNumber=24,
+        )
+
 
         fb_requests = []
         for x in xrange(len(mailbox_data_array)):
@@ -467,10 +466,10 @@ class ExchangeService(ServiceBase):
                 if calendar_folder is None:
                     log.warn("no calendar folder found for '%s'" % user_email)
                     fb_response \
-                        = ExchangeService._freebusy_lookup_error_response()
+                            = ExchangeService._freebusy_lookup_error_response()
                 else:
                     fb_response \
-                        = ExchangeService._freebusy_response(calendar_folder,
+                            = ExchangeService._freebusy_response(calendar_folder,
                                                              timezone,
                                                              freebusy_view_options)
                 freebusy.append(fb_response)
@@ -479,11 +478,11 @@ class ExchangeService(ServiceBase):
 
         if suggestions_view_options is not None:
             suggestions \
-                = ExchangeService._suggestions_response(timezone,
+                    = ExchangeService._suggestions_response(timezone,
                                                         suggestions_view_options)
         else:
             suggestions = None
-        
+
         return (freebusy, suggestions)
 
 EwsApp = Application([ExchangeService], EWS_M_NS,

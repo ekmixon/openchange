@@ -25,10 +25,15 @@ class ErrorController(BaseController):
         """Render the error document"""
         resp = request.environ.get('pylons.original_response')
         content = cgi.escape(request.GET.get('message', ''))
-        page = """
+        return (
+            """
 <!DOCTYPE ocsmanager>
 <xml>
   <error code="%(code)s">%(message)s</error>
 </xml>
-""" % {'code':cgi.escape(request.GET.get('code', str(resp.status_int))), 'message': content}
-        return page
+"""
+            % {
+                'code': cgi.escape(request.GET.get('code', str(resp.status_int))),
+                'message': content,
+            }
+        )

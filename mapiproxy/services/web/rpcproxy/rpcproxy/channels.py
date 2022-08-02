@@ -140,13 +140,13 @@ class RPCProxyInboundChannelHandler(RPCProxyChannelHandler):
         packet = RPCPacket.from_file(self.client_socket, self.logger)
         if not isinstance(packet, RPCRTSPacket):
             raise Exception("Unexpected non-rts packet received for CONN/B1")
-        self.logger.debug("packet headers = " + packet.pretty_dump())
+        self.logger.debug(f"packet headers = {packet.pretty_dump()}")
 
         self.connection_cookie = str(UUID(bytes=packet.commands[1]["Cookie"]))
         self.channel_cookie = str(UUID(bytes=packet.commands[2]["Cookie"]))
         self.client_keepalive = packet.commands[4]["ClientKeepalive"]
         self.association_group_id = str(UUID(bytes=packet.commands[5] \
-                                                 ["AssociationGroupId"]))
+                                                     ["AssociationGroupId"]))
         self.bytes_read = self.bytes_read + packet.size
 
     def _connect_to_OUT_channel(self):
@@ -159,13 +159,12 @@ class RPCProxyInboundChannelHandler(RPCProxyChannelHandler):
         attempt = 0
         while not connected and attempt < 10:
             try:
-                attempt = attempt + 1
+                attempt += 1
                 unix_socket.connect(socket_name)
                 self.unix_socket = unix_socket
                 connected = True
             except socket_error:
-                self.logger.debug("handling socket.error: %s"
-                                 % str(sys.exc_info()))
+                self.logger.debug(f"handling socket.error: {str(sys.exc_info())}")
                 self.logger.warn("reattempting to connect to OUT"
                                  " channel... (%d/10)" % attempt)
                 sleep(1)
@@ -207,23 +206,21 @@ class RPCProxyInboundChannelHandler(RPCProxyChannelHandler):
                 if isinstance(oc_packet, RPCRTSPacket):
                     labels = [RTS_CMD_DATA_LABELS[command["type"]]
                               for command in oc_packet.commands]
-                    self.logger.debug("ignored RTS packet with commands: %s"
-                                      % ", ".join(labels))
+                    self.logger.debug(f'ignored RTS packet with commands: {", ".join(labels)}')
                 else:
                     self.logger.debug("sending packet to OC")
                     self.oc_conn.sendall(oc_packet.data)
                     self.bytes_written = self.bytes_written + oc_packet.size
             except IOError:
                 status = False
-                self.logger.debug("handling socket.error: %s"
-                                  % str(sys.exc_info()))
+                self.logger.debug(f"handling socket.error: {str(sys.exc_info())}")
                 # exc = sys.exc_info()
                 self.logger.error("client connection closed")
 
     def sequence(self, environ, start_response):
         self.logger.debug("processing request")
         if "REMOTE_PORT" in environ:
-            self.logger.debug("remote port = %s" % environ["REMOTE_PORT"])
+            self.logger.debug(f'remote port = {environ["REMOTE_PORT"]}')
         # self.logger.debug("path: ' + self.path)
 
         content_length = int(environ["CONTENT_LENGTH"])
@@ -231,17 +228,14 @@ class RPCProxyInboundChannelHandler(RPCProxyChannelHandler):
 
         # echo request
         if content_length <= 0x10:
-            for data in self.handle_echo_request(environ, start_response):
-                yield data
+            yield from self.handle_echo_request(environ, start_response)
             self.logger.debug("exiting from echo request")
         elif content_length >= 128:
             self.logger.debug("processing IN channel request")
 
             self.client_socket = environ["wsgi.input"]
             self._receive_conn_b1()
-            connected = self._connect_to_OUT_channel()
-
-            if connected:
+            if connected := self._connect_to_OUT_channel():
                 start_response("200 Success",
                                [("Content-Type", "application/rpc"),
                                 ("Content-length", "0")])
@@ -250,19 +244,16 @@ class RPCProxyInboundChannelHandler(RPCProxyChannelHandler):
                 # shutting down sockets
                 self.logger.debug("notifying OUT channel of shutdown")
                 try:
-                    self.unix_socket.sendall(INBOUND_PROXY_ID + "q")
+                    self.unix_socket.sendall(f"{INBOUND_PROXY_ID}q")
                     _safe_close(self.unix_socket)
                     self.logger.debug("OUT channel successfully notified")
                 except socket_error:
                     self.logger.debug("(OUT channel already shutdown the unix socket)")
-                    # OUT channel already closed the connection
-                    pass
-
                 _safe_close(self.oc_conn)
 
             self.log_connection_stats()
             self.logger.debug("exiting from main sequence")
-            
+
             # TODO: error handling
             start_response("200 Success",
                            [("Content-length", "0"),
@@ -299,7 +290,7 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
         packet = RPCPacket.from_file(self.client_socket, self.logger)
         if not isinstance(packet, RPCRTSPacket):
             raise Exception("Unexpected non-rts packet received for CONN/A1")
-        self.logger.debug("packet headers = " + packet.pretty_dump())
+        self.logger.debug(f"packet headers = {packet.pretty_dump()}")
 
         self.connection_cookie = str(UUID(bytes=packet.commands[1]["Cookie"]))
         self.channel_cookie = str(UUID(bytes=packet.commands[2]["Cookie"]))
@@ -330,7 +321,7 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
 
     def _setup_oc_socket(self):
         # create IP connection to OpenChange
-        self.logger.debug("connecting to %s:1024" % self.samba_host)
+        self.logger.debug(f"connecting to {self.samba_host}:1024")
         connected = False
         while not connected:
             try:
@@ -378,13 +369,12 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
 
             data = unix_socket.recv(2, MSG_WAITALL)
             if data != INBOUND_PROXY_ID:
-                raise IOError("connection must be from IN proxy (1): /%s/"
-                              % data)
+                raise IOError(f"connection must be from IN proxy (1): /{data}/")
 
             self.logger.debug("receiving window size + conn_timeout")
             # receive the WindowSize + ConnectionTimeout
             (self.in_window_size, self.in_conn_timeout) = \
-                unpack_from("<ll", unix_socket.recv(8, MSG_WAITALL))
+                    unpack_from("<ll", unix_socket.recv(8, MSG_WAITALL))
             self.logger.debug("window size = %d; conn_timeout = %d"
                               % (self.in_window_size, self.in_conn_timeout))
             # send OC socket
@@ -392,13 +382,11 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
             send_socket(unix_socket, self.oc_conn)
             self.unix_socket = unix_socket
 
-            connected = True
+            return True
         else:
             self.logger.info("IN channel failed to connect in the last"
                              " 10 seconds")
-            connected = False
-        
-        return connected
+            return False
 
     def _process_server_event(self, unix_fd, oc_fd, data):
         status = True
@@ -433,7 +421,7 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
             # FIXME: we should listen to what the IN channel has to say
             status = False
         else:
-            raise Exception("invalid poll event: %s" % str(data))
+            raise Exception(f"invalid poll event: {str(data)}")
 
         return (status, server_data)
 
@@ -453,16 +441,13 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
             self.logger.debug("step in loop")
             chunks = fd_pool.poll(2000.0)
 
-            if len(chunks) == 0:
-                # send ping packets?
-                pass
-            else:
+            if len(chunks) != 0:
                 for data in chunks:
                     event_status, server_data \
-                        = self._process_server_event(unix_fd, oc_fd, data)
+                            = self._process_server_event(unix_fd, oc_fd, data)
                     if server_data is not None:
                         self.bytes_written \
-                            = self.bytes_written + len(server_data)
+                                = self.bytes_written + len(server_data)
                         self.logger.debug("data sent")
                         yield server_data
                     status = status and event_status
@@ -481,15 +466,14 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
     def sequence(self, environ, start_response):
         self.logger.debug("processing request")
         if "REMOTE_PORT" in environ:
-            self.logger.debug("remote port = %s" % environ["REMOTE_PORT"])
+            self.logger.debug(f'remote port = {environ["REMOTE_PORT"]}')
         # self.logger.debug("path: ' + self.path)
         content_length = int(environ["CONTENT_LENGTH"])
         self.logger.debug("request size is %d" % content_length)
 
         if content_length <= 0x10:
             # echo request
-            for data in self.handle_echo_request(environ, start_response):
-                yield data
+            yield from self.handle_echo_request(environ, start_response)
         elif content_length == 76:
             self.logger.debug("processing nonreplacement Out channel"
                               "request")
@@ -505,14 +489,11 @@ class RPCProxyOutboundChannelHandler(RPCProxyChannelHandler):
             yield self._send_conn_a3()
             self._setup_oc_socket()
             self._setup_channel_socket()
-            connected = self._wait_IN_channel()
-
-            if connected:
+            if connected := self._wait_IN_channel():
                 yield self._send_conn_c2()
                 self.logger.debug("total bytes sent yet: %d"
                                   % self.bytes_written)
-                for data in self._runloop():
-                    yield data
+                yield from self._runloop()
             self._terminate_sockets()
 
         elif content_length == 120:

@@ -21,8 +21,7 @@ class SingleAuthenticateModel(object):
             sys.exit()
 
     def getSalt(self, username):
-        if username != self.username: return None
-        return encode(self.salt)
+        return None if username != self.username else encode(self.salt)
 
     def verifyPassword(self, username, token_salt64, salt64, payload):
         if username != self.username: return (True, 'Invalid Username/Password')
@@ -41,11 +40,9 @@ class SingleAuthenticateModel(object):
             log.error("%s: Unsupported password encryption: %s", self.encryption)
             sys.exit()
 
-        h = hashlib.sha1(str(username) + ':' + str(sshaPassword) + ':' + str(token_salt))
-        h.update(token_salt)            
+        h = hashlib.sha1(f'{str(username)}:{str(sshaPassword)}:{str(token_salt)}')
+        h.update(token_salt)
         phash = h.hexdigest()
 
         # Final authentication check
-        if phash == payload: return (False, None)
-
-        return (True, 'Invalid Credentials')
+        return (False, None) if phash == payload else (True, 'Invalid Credentials')

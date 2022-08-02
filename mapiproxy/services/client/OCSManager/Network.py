@@ -31,7 +31,7 @@ class Network(object):
         self.port = port
         self.verbose = verbose
         self.token = None
-        self.base_uri = 'http://%s:%s' % (host, port)
+        self.base_uri = f'http://{host}:{port}'
         (self.fp,self.cookie) = tempfile.mkstemp()
 
     def __del__(self):
@@ -40,8 +40,7 @@ class Network(object):
 
     def __make_url(self, service=None):
         """Generate the URL to connect to."""
-        if service is None: return None
-        return "%s/%s" % (self.base_uri, service)
+        return None if service is None else f"{self.base_uri}/{service}"
 
     def __get_error(self, data):
         """Retrieve error code and associated string if available.
@@ -56,7 +55,7 @@ class Network(object):
         error = dataXML.find('error')
         if error is None: return (None, None)
 
-        if not "code" in error.attrib: return (None, None)
+        if "code" not in error.attrib: return (None, None)
         if error.text is None: return (None, None)
         code = error.attrib["code"]
         string = error.text

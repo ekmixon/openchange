@@ -36,8 +36,7 @@ class AuthenticateModel:
         if error is True: return None
 
         token = xmlData.find('token')
-        if token is None: return None
-        return decode(token.text)
+        return None if token is None else decode(token.text)
 
         
 
@@ -62,5 +61,5 @@ class AuthenticateModel:
 
         token = xmlData.find('token')
         if token is None: return (True, 'No token parameter found')
- 
+
         return self.model.verifyPassword(login, token_salt, salt, token.text)

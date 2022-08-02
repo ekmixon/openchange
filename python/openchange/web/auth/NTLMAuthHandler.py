@@ -98,7 +98,6 @@ class _NTLMDaemon(object):
                            getpid())
             while not exists(self.socket_filename):
                 sleep(0.5)
-                pass
             self.log.debug("socket of ntlm daemon now exists (%d)", getpid())
         else:
             raise Exception("failure to fork NTLM daemon")
@@ -109,18 +108,12 @@ class _NTLMDaemon(object):
         setsid()
 
         import resource
-        MAXFD = 1024
-            # we close all open file descriptors != sys.stderr.fileno()
         maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
         if (maxfd == resource.RLIM_INFINITY):
+            MAXFD = 1024
             maxfd = MAXFD
-  
-        if hasattr(sys.stderr, "fileno"):
-            stderr_fileno = sys.stderr.fileno()
-        else:
-            # mod_wsgi replace sys.stderr with a fake file without a "fileno"
-            # method
-            stderr_fileno = -1
+
+        stderr_fileno = sys.stderr.fileno() if hasattr(sys.stderr, "fileno") else -1
         # close all fd > 4
         for fd in xrange(3, maxfd):
             if fd != stderr_fileno:
@@ -142,7 +135,7 @@ class _NTLMDaemon(object):
             _exit(0)
 
         self.log.info("NTLMAuthHandler daemon spawned with pid %d", getpid())
-        
+
         # forked processes inherits lock created by flock, so we need to
         # unlock the file here
         # flock(lockf.fileno(), LOCK_UN)
@@ -291,16 +284,13 @@ class _NTLMDaemon(object):
                 ntlm_payload = ""
             else:
                 (response, ntlm_payload) \
-                    = self._handle_negotiate(client_id, ntlm_payload)
+                        = self._handle_negotiate(client_id, ntlm_payload)
 
-            if response == 0:
-                # directly cleanup the client record, in order to reduce the
-                # amount of sockets in use
-                if client_id in self.client_data:
-                  if "server" in self.client_data[client_id]:
-                      server = self.client_data[client_id]["server"]
-                      _safe_close(server)
-                  del self.client_data[client_id]
+            if response == 0 and client_id in self.client_data:
+                if "server" in self.client_data[client_id]:
+                    server = self.client_data[client_id]["server"]
+                    _safe_close(server)
+                del self.client_data[client_id]
 
             len_ntlm_payload = len(ntlm_payload)
             client_socket.sendall(pack("<Bl", response, len_ntlm_payload)
@@ -341,11 +331,7 @@ class _NTLMDaemon(object):
         try:
             packet = RPCPacket.from_file(server)
             if isinstance(packet, RPCFaultPacket):
-                if packet.header["call_id"] == 2:
-                    # the Fault packet related to our Ping operation
-                    response = 1
-                else:
-                    response = 0
+                response = 1 if packet.header["call_id"] == 2 else 0
             else:
                 raise ValueError("unexpected packet")
         except socket_error:
@@ -378,9 +364,9 @@ class _NTLMDaemon(object):
 
         connected = False
         attempt = 0
-        while not connected and attempt < SAMBA_CONNECT_MAX_TRIES :
+        while not connected and attempt < SAMBA_CONNECT_MAX_TRIES:
             try:
-                attempt = attempt + 1
+                attempt += 1
                 # TODO: we should query port 135 for the right service
                 server = socket(AF_INET, SOCK_STREAM)
                 server.connect((self.samba_host, SAMBA_PORT))
@@ -400,7 +386,7 @@ class _NTLMDaemon(object):
         self.log.debug("building bind packet")
         packet = RPCBindOutPacket()
         packet.ntlm_payload = ntlm_payload
-        
+
         self.log.debug("sending bind packet")
         server.sendall(packet.make())
 
@@ -434,7 +420,7 @@ class _NTLMAuthClient(object):
 
     def server_knows_client(self, client_id):
         self.log.debug("server knows client? (%d)", getpid())
-        payload = "k%s%s" % (pack("<l", len(client_id)), client_id)
+        payload = f'k{pack("<l", len(client_id))}{client_id}'
         self._send_to_server(payload)
         payload = self._recv_from_server(1)
         if len(payload) > 0:
@@ -449,9 +435,8 @@ class _NTLMAuthClient(object):
     def ntlm_transaction(self, client_id="", ntlm_payload=""):
         self.log.debug("ntlm_transaction (%d)", getpid())
 
-        payload = ("t%s%s%s%s"
-                   % (pack("<l", len(client_id)), client_id,
-                      pack("<l", len(ntlm_payload)), ntlm_payload))
+        payload = f't{pack("<l", len(client_id))}{client_id}{pack("<l", len(ntlm_payload))}{ntlm_payload}'
+
         self._send_to_server(payload)
         payload = self._recv_from_server(5)
         if len(payload) > 0:
@@ -511,23 +496,22 @@ class _NTLMAuthClient(object):
         # we create a lock in order to make sure that we would be the only
         # process or thread starting a daemon if needed
 
-        lock_filename = join(self.work_dir, "ntlm-%s.lock" % self.samba_host)
+        lock_filename = join(self.work_dir, f"ntlm-{self.samba_host}.lock")
         if not exists(lock_filename):
             lockf = open(lock_filename, "w+")
             lockf.close()
-        lockf = open(lock_filename, "r")
-        self.log.info("acquiring lock %s (%d)", lock_filename, getpid())
-        lock_fd = lockf.fileno()
-        flock(lock_fd, LOCK_EX)
-        self.log.debug("acquired lock (%d)", getpid())
-        self.connection = self._connect_to_daemon(self.work_dir,
-                                                  self.samba_host)
-        flock(lock_fd, LOCK_UN)
-        lockf.close()
+        with open(lock_filename, "r") as lockf:
+            self.log.info("acquiring lock %s (%d)", lock_filename, getpid())
+            lock_fd = lockf.fileno()
+            flock(lock_fd, LOCK_EX)
+            self.log.debug("acquired lock (%d)", getpid())
+            self.connection = self._connect_to_daemon(self.work_dir,
+                                                      self.samba_host)
+            flock(lock_fd, LOCK_UN)
 
     @staticmethod
     def _connect_to_daemon(work_dir, samba_host):
-        socket_filename = join(work_dir, "ntlm-%s" % samba_host)
+        socket_filename = join(work_dir, f"ntlm-{samba_host}")
         stat_s = stat(work_dir)
         connection = socket(AF_UNIX, SOCK_STREAM)
         try:
@@ -562,7 +546,7 @@ class NTLMAuthHandler(object):
 
     def __call__(self, env, start_response):
         (work_dir, samba_host, cookie_name, has_auth) \
-            = self._read_environment(env)
+                = self._read_environment(env)
 
         connection = _NTLMAuthClient(work_dir, samba_host)
 
@@ -586,7 +570,7 @@ class NTLMAuthHandler(object):
                 # from the server and is now sending an AUTH message
                 # server_knows_client implies that client_id is valid
                 (success, payload) \
-                    = connection.ntlm_transaction(client_id, ntlm_payload)
+                        = connection.ntlm_transaction(client_id, ntlm_payload)
                 if success:
                     connection.close()
                     response = self.application(env, start_response)
@@ -597,24 +581,24 @@ class NTLMAuthHandler(object):
                 # know the NTLM payload is a NEGOTIATE message
                 client_id = str(uuid4())
                 (success, ntlm_payload) \
-                    = connection.ntlm_transaction(client_id, ntlm_payload)
-                if success:
-                    response = self._in_progress_response(start_response,
-                                                          ntlm_payload,
-                                                          client_id,
-                                                          cookie_name)
-                else:
-                    response = self._in_progress_response(start_response)
+                        = connection.ntlm_transaction(client_id, ntlm_payload)
+                response = (
+                    self._in_progress_response(
+                        start_response, ntlm_payload, client_id, cookie_name
+                    )
+                    if success
+                    else self._in_progress_response(start_response)
+                )
+
+        elif server_knows_client:
+            # authenticated, where no NTLM payload is provided anymore
+            connection.close()
+            response = self.application(env, start_response)
         else:
-            if server_knows_client:
-                # authenticated, where no NTLM payload is provided anymore
-                connection.close()
-                response = self.application(env, start_response)
-            else:
-                # this client has never been seen
-                # note: this is the only case where the "connection" object is
-                # uselessly instantiated
-                response = self._in_progress_response(start_response, None)
+            # this client has never been seen
+            # note: this is the only case where the "connection" object is
+            # uselessly instantiated
+            response = self._in_progress_response(start_response, None)
 
         connection.close()
 
@@ -623,16 +607,15 @@ class NTLMAuthHandler(object):
     @staticmethod
     def _read_environment(env):
         log = logging.getLogger(__name__)
-        if "NTLMAUTHHANDLER_WORKDIR" in env:
-            work_dir = env["NTLMAUTHHANDLER_WORKDIR"]
-            if not exists(work_dir):
-                raise ValueError("the directory specified for"
-                                 " 'NTLMAUTHHANDLER_WORKDIR' does not exist:"
-                                 " '%s'" % work_dir)
-        else:
+        if "NTLMAUTHHANDLER_WORKDIR" not in env:
             raise ValueError("'NTLMAUTHHANDLER_WORKDIR' is not set in"
                              " the environment")
 
+        work_dir = env["NTLMAUTHHANDLER_WORKDIR"]
+        if not exists(work_dir):
+            raise ValueError("the directory specified for"
+                             " 'NTLMAUTHHANDLER_WORKDIR' does not exist:"
+                             " '%s'" % work_dir)
         if "SAMBA_HOST" in env:
             samba_host = env["SAMBA_HOST"]
         else:
@@ -663,7 +646,7 @@ class NTLMAuthHandler(object):
     @staticmethod
     def _in_progress_response(start_response, ntlm_data=None,
                               client_id=None, cookie_name=None):
-        status = "401 %s" % httplib.responses[401]
+        status = f"401 {httplib.responses[401]}"
         content = "More data needed..."
         headers = [("Content-Type", "text/plain"),
                    ("Content-Length", "%d" % len(content))]
@@ -676,7 +659,7 @@ class NTLMAuthHandler(object):
 
         if client_id is not None:
             # MUST occur when ntlm_data is None, can still occur otherwise
-            headers.append(("Set-Cookie", "%s=%s" % (cookie_name, client_id)))
+            headers.append(("Set-Cookie", f"{cookie_name}={client_id}"))
 
         headers.append(("WWW-Authenticate", www_auth_value))
         start_response(status, headers)

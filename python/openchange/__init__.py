@@ -31,8 +31,13 @@ except ImportError:
             continue
         for lib_dir in ["lib", "lib64"]:
             python_version = "%d.%d" % sys.version_info[:2]
-            path = os.path.join(samba_prefix, lib_dir,
-                "python%s" % python_version, "site-packages")
+            path = os.path.join(
+                samba_prefix,
+                lib_dir,
+                f"python{python_version}",
+                "site-packages",
+            )
+
             if os.path.isdir(os.path.join(path, "samba")):
                 sys.path.append(path)
                 break

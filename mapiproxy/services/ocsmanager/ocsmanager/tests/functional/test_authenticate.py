@@ -16,8 +16,11 @@ class TestAuthenticateController(TestController):
         assert len(tokens) == 2, "2 tokens expected got %d" % len(tokens)
         number = 0
         for token in tokens:
-            assert "type" in token.attrib, 'no type option specified: %s' % token.attrib
-            assert token.text is not None, 'no text value for token type=%s' % token.attrib['type']
+            assert "type" in token.attrib, f'no type option specified: {token.attrib}'
+            assert (
+                token.text is not None
+            ), f"no text value for token type={token.attrib['type']}"
+
             if "type" in token.attrib:
                 if token.attrib["type"] == "session": number += 1
                 if token.attrib["type"] == "salt" : number += 1
@@ -35,7 +38,7 @@ class TestAuthenticateController(TestController):
         error = xmlData.find('error')
         assert error is not None
         code = error.attrib['code']
-        assert code == '417', "Invalid error code %s, expected 417" % code
+        assert code == '417', f"Invalid error code {code}, expected 417"
 
     def test_token_no_payload(self):
         """ Test token with no payload. Expect error XML with code 417."""
@@ -46,5 +49,5 @@ class TestAuthenticateController(TestController):
         error = xmlData.find('error')
         assert error is not None
         code = error.attrib['code']
-        assert code == '417', "Invalid error code %s, expected 417" % code
+        assert code == '417', f"Invalid error code {code}, expected 417"
 

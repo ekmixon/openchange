@@ -65,11 +65,11 @@ class AuthenticateController(BaseController):
         """Authenticate the user on ocsmanager.
         """
 
-        if not "ocsmanager" in request.cookies: return self._auth_abort(403, 'Invalid Session')
-        if not "token" in session: return self._auth_abort(403, 'Invalid Session')
-        if not "token" in request.cookies: return self._auth_abort(403, 'Invalid Token')
+        if "ocsmanager" not in request.cookies: return self._auth_abort(403, 'Invalid Session')
+        if "token" not in session: return self._auth_abort(403, 'Invalid Session')
+        if "token" not in request.cookies: return self._auth_abort(403, 'Invalid Token')
         if request.cookies.get('token') != session['token']: return self._auth_abort(403, 'Invalid Token')
-        if not "login" in session: return self._auth_abort(403, 'Invalid Session')
+        if "login" not in session: return self._auth_abort(403, 'Invalid Session')
 
         payload = request.body
         if payload is None:

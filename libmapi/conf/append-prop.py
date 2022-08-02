@@ -19,21 +19,15 @@ filename = "mapi-named-properties"
 
 def getLineID(line):
     idPos = line.rfind("0x")
-    if idPos < len(line) - 8:
-        lineID = -1
-    else:
-        lineID = int(line[idPos:], 16)
-
-    return lineID
+    return -1 if idPos < len(line) - 8 else int(line[idPos:], 16)
 
 def getLastID(filename):
-    propFile = open(filename)
-    lines = propFile.readlines()
-    propFile.close()
+    with open(filename) as propFile:
+        lines = propFile.readlines()
     lastID = -1
     for line in lines:
         line = line.strip()
-        if len(line) > 0 and line[0] != '#' and line[0] != '#' and line[0] != ' ':
+        if len(line) > 0 and line[0] != '#' and line[0] != ' ':
             lineID = getLineID(line)
             if lineID > lastID:
                 lastID = lineID
@@ -59,9 +53,7 @@ guidArray = [("PS_MAPI",                "00020328-0000-0000-c000-000000000046"),
              ("PSETID_UnifiedMessaging", "4442858e-a9e3-4e80-b900-317a210cc15b"),
              ("PSETID_AirSync",          "71035549-0739-4dcb-9163-00f0580dbbdf")]
 
-guidMapping = {}
-for guidTpl in guidArray:
-    guidMapping[guidTpl[1]] = guidTpl[0]
+guidMapping = {guidTpl[1]: guidTpl[0] for guidTpl in guidArray}
 
 def canonicalizeName(name):
     for sep in [ ":", "/" ]:

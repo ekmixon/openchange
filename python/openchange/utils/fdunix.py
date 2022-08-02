@@ -164,6 +164,4 @@ def receive_socket(socket):
 
     # the 'mode' parameter should probably passed as part of the message
     (fd,) = unpack_from("i", cmsg.cmsg_data)
-    newfile = fromfd(fd, AF_INET, SOCK_STREAM)
-
-    return newfile
+    return fromfd(fd, AF_INET, SOCK_STREAM)

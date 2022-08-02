@@ -82,7 +82,7 @@ class GetPropsParser:
 
     def _registerColumn(self, remain):
         spaceIdx = remain.find(" ")
-        propName = remain[0:spaceIdx]
+        propName = remain[:spaceIdx]
         parenCloseIdx = remain.find(")")
         propTag = remain[spaceIdx+2:parenCloseIdx]
         propTagInt = int(propTag, 16)
@@ -103,7 +103,7 @@ class GetPropsParser:
                     done = True
                 else:
                     self._appendResponseByte(responseByte)
-                    it = it + 1
+                    it += 1
                     pos = pos + 3
             pos = pos + 2
 
@@ -188,12 +188,8 @@ class GetPropsParser:
     def _printLong(self, pos, error = False):
         longValue = struct.unpack_from("<L", self.response, pos)[0]
 
-        if error:
-            longType = "PT_ERROR"
-        else:
-            longType = "PT_LONG"
-
-        print "(%s) 0x%.8x" % (longType, longValue)
+        longType = "PT_ERROR" if error else "PT_LONG"
+        longValue = struct.unpack_from("<L", self.response, pos)[0]
 
         return 4
 
@@ -212,9 +208,8 @@ class GetPropsParser:
             stringValue = (stringValue
                            + self.response[pos + length]
                            + self.response[pos + length + 1])
-            length = length + 2
-        print "(PT_STRING, %d bytes): \"%s\"" % (length, stringValue.decode("utf-16"))
-
+            length += 2
+        length = 0
         return 2 + length
 
     def _printSysTime(self, pos):
@@ -256,9 +251,9 @@ class GetPropsParser:
     def _printMultiValue(self, pos, colType):
         length = struct.unpack_from("<L", self.response, pos)[0]
         subtype = colType & 0x0fff
-        print "multivalue (%d, 0xX%.3x)" % (length, subtype)
+        length = struct.unpack_from("<L", self.response, pos)[0]
         consumed = 4
-        for x in xrange(length):
+        for _ in xrange(length):
             consumed = consumed + self._printValue(pos + consumed, subtype)
 
         return consumed

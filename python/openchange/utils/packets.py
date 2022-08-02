@@ -233,17 +233,13 @@ class RPCPacket(object):
     def pretty_dump(self):
         (fields, values) = self.make_dump_output()
 
-        output = ["%s: %s" % (fields[pos], str(values[pos]))
-                  for pos in xrange(len(fields))]
+        output = [f"{fields[pos]}: {str(values[pos])}" for pos in xrange(len(fields))]
 
         return "; ".join(output)
 
     def make_dump_output(self):
-        values = []
-        
         ptype = self.header["ptype"]
-        values.append(DCERPC_PKG_LABELS[ptype])
-
+        values = [DCERPC_PKG_LABELS[ptype]]
         flags = self.header["pfc_flags"]
         if flags == 0:
             values.append("None")
@@ -257,9 +253,7 @@ class RPCPacket(object):
 
         fields = ["ptype", "pfc_flags", "drep", "frag_length",
                   "auth_length", "call_id"]
-        for field in fields[2:]:
-            values.append(self.header[field])
-
+        values.extend(self.header[field] for field in fields[2:])
         return (fields, values)
 
 
@@ -304,7 +298,7 @@ class RPCRTSPacket(RPCPacket):
         self.offset = self.offset + 4
         self.header.update(zip(fields, values))
 
-        for counter in xrange(self.header["nbr_commands"]):
+        for _ in xrange(self.header["nbr_commands"]):
             self._parse_command()
 
         if (self.size != self.offset):
@@ -437,10 +431,7 @@ class RPCBindOutPacket(object):
 
         ntlm_payload_size = len(self.ntlm_payload)
         align_modulo = ntlm_payload_size % 4
-        if align_modulo > 0:
-            padding = (4 - align_modulo) * "\0"
-        else:
-            padding = ""
+        padding = (4 - align_modulo) * "\0" if align_modulo > 0 else ""
         len_padding = len(padding)
 
 
@@ -524,11 +515,7 @@ class RPCAuth3OutPacket(object):
 
         ntlm_payload_size = len(self.ntlm_payload)
         align_modulo = ntlm_payload_size % 4
-        if align_modulo > 0:
-            len_padding = (4 - align_modulo)
-        else:
-            len_padding = 0
-
+        len_padding = (4 - align_modulo) if align_modulo > 0 else 0
         header_data = pack("<bbbbbbbbhhl 4s bbbbl",
                            5, 0, # rpc_vers, rpc_vers_minor
                            DCERPC_PKT_AUTH_3, # ptype
@@ -615,7 +602,7 @@ class RPCRTSOutPacket(object):
         self.command_data = None
 
         if self.logger is not None:
-            self.logger.debug("returning packet: %s" % repr(data))
+            self.logger.debug(f"returning packet: {repr(data)}")
 
         return data
 
@@ -647,8 +634,7 @@ class RPCRTSOutPacket(object):
         if command_size > 4:
             if command_type == RTS_CMD_FLOW_CONTROL_ACK:
                 data = self._make_command_flow_control_ack(args[0])
-            elif (command_type == RTS_CMD_COOKIE
-                  or command_type == RTS_CMD_ASSOCIATION_GROUP_ID):
+            elif command_type in [RTS_CMD_COOKIE, RTS_CMD_ASSOCIATION_GROUP_ID]:
                 data = self._make_command_cookie(args[0])
             elif command_type == RTS_CMD_PADDING:
                 data = self._make_command_padding_data(args[0])

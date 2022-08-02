@@ -32,13 +32,12 @@ class OCSConfig(object):
         else:
             cfg_option = self.cfg.get(section, option)
 
-        if shash is not None:
-            if not shash in self.d:
-                self.d[shash] = {}
-        else:
-            if not section in self.d:
+        if shash is None:
+            if section not in self.d:
                 self.d[section] = {}
 
+        elif shash not in self.d:
+            self.d[shash] = {}
         if shash is None and ohash is None:
             self.d[section][option] = cfg_option
         if shash is not None and ohash is None:
@@ -57,18 +56,18 @@ class OCSConfig(object):
         self.__get_option('main', 'mapistore_root')
         self.__get_option('main', 'mapistore_data')
         self.__get_option('main', 'debug')
-        if self.d['main']['debug'] != "yes" and self.d['main']['debug'] != "no":
+        if self.d['main']['debug'] not in ["yes", "no"]:
             log.error("%s: invalid debug value: %s. Must be set to yes or no", self.config, self.d['main']['debug'])
             sys.exit()
-        
-        if not self.cfg.has_section('auth:%s' % self.d['auth']['type']):
+
+        if not self.cfg.has_section(f"auth:{self.d['auth']['type']}"):
             log.error("%s: Missing [auth:%s] section", self.config, self.d['auth']['type'])
             sys.exit()
 
     def __parse_auth(self):
-        section = 'auth:%s' % self.d['auth'].get('type')
+        section = f"auth:{self.d['auth'].get('type')}"
         self.__get_section(section)
-        
+
         if self.d['auth']['type'] == 'single':
             self.__get_option(section, 'username', 'auth', None)
             self.__get_option(section, 'password', 'auth', None)

@@ -62,14 +62,13 @@ class GLOBSetRunner:
                     lowValue = combined + ((x + 1) << 40)
                     highValue = lowValue
                     # print "doBitmask: new record (ends: %x)" % lowValue
+            elif (mask & bit) == 0:
+                # print "doBitmask: commit: [%.12x:%.12x]" % (lowValue, highValue)
+                self.ranges.append((lowValue, highValue))
+                blank = True
             else:
-                if (mask & bit) == 0:
-                    # print "doBitmask: commit: [%.12x:%.12x]" % (lowValue, highValue)
-                    self.ranges.append((lowValue, highValue))
-                    blank = True
-                else:
-                    highValue = combined + ((x + 1) << 40)
-                    # print "doBitmask: extending range (highValue: %x)" % highValue
+                highValue = combined + ((x + 1) << 40)
+                # print "doBitmask: extending range (highValue: %x)" % highValue
 
         if not blank:
             self.ranges.append((lowValue, highValue))
